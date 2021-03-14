@@ -22,9 +22,16 @@ func init() {
 	compiler, err := ast.CompileModules(map[string]string{
 		"whoami.rego": `
 		package auth
-		whoami[user] {
-			token := split(input.Headers.Authorization[0], " ")[1]
-			user := [u| input.Users[u].Token == token][0]
+		whoami[result] {
+			headers := object.get(input.Headers, "Authorization", [])
+			token := concat("", {h| h := split(headers[_], " ")[1]})
+			users := [u| input.Users[u].Token == token]
+
+			result := {
+				"auth_header_set": object.get(input.Headers, "Authorization", false) != false,
+				"token": token,
+				"users": users,
+			}
 		}`,
 	})
 	if err != nil {
@@ -35,7 +42,7 @@ func init() {
 	// evaluating requests
 	whoAmiRule, err = rego.
 		New(rego.Compiler(compiler), rego.Query("data.auth.whoami")).
-		PartialResult(context.TODO())
+		PartialResult(context.Background())
 	if err != nil {
 		log.Fatalf("failed to compute partial result: %s", err)
 	}
@@ -56,32 +63,65 @@ func WhoAmIHandler(users *map[string]types.User) func(w http.ResponseWriter, r *
 		// this evaluates our rule for the endpoint with the request and the user
 		// data (clearly it'd be unwise to load all the users into an authz
 		// check in a real application...)
-		resultSet, err := whoAmiRule.Rego(rego.Input(authzInputData)).Eval(context.TODO())
+		resultSet, err := whoAmiRule.Rego(rego.Input(authzInputData)).Eval(r.Context())
 		if err != nil || resultSet == nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		// extract the data from the response into a list of matched users, there
-		// may be more than one with the same key
-		users := []string{}
-		for _, result := range resultSet {
-			for _, exp := range result.Expressions {
-				interfaceSlice, ok := (exp.Value).([]interface{})
-				if !ok {
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
+		if len(resultSet) != 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		result := resultSet[0]
 
-				for _, v := range interfaceSlice {
-					str, ok := v.(string)
-					if !ok {
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-					users = append(users, str)
-				}
-			}
+		// we expect there to be a single solution in the valid case of identifying
+		// a user
+		if len(result.Expressions) != 1 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		expressions, ok := result.Expressions[0].Value.([]interface{})
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if len(expressions) != 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		expression, ok := expressions[0].(map[string]interface{})
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		authHeaderSet, ok := expression["auth_header_set"].(bool)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if authHeaderSet == false {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		token, ok := expression["token"].(string)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if token == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		users := expression["users"].([]interface{})
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
 		// we expect there to be a single solution in the valid case of identifying
@@ -91,8 +131,14 @@ func WhoAmIHandler(users *map[string]types.User) func(w http.ResponseWriter, r *
 			return
 		}
 
+		user, ok := users[0].(string)
+		if !ok {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		// report back the to the user who they are
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, users[0])
+		fmt.Fprintf(w, user)
 	}
 }
