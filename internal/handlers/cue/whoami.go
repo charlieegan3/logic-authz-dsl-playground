@@ -20,24 +20,21 @@ users: [string]: {
 }
 headers: [string]: [string]
 
-token: strings.Split(headers.Authorization[0], " ")[1]
+_auth_header_value: *headers.Authorization[0] | ""
+_token: *strings.Split(_auth_header_value, " ")[1] | ""
 
 _matched: [
 	for name, user in users
-	if user.Token == token {
+	if user.Token == _token {
 		name
-	},
+	}
 ]
 
-_count: len(_matched)
-_name: ""
-if len(_matched) > 0 {
-	_name: _matched[0]
-}
-
 result: {
-	found: _count > 0,
-	name: _name,
+	auth_header_set: _auth_header_value != "",
+	token: _token,
+	found: len(_matched) > 0,
+	name: *_matched[0] | ""
 }
 `
 
@@ -46,30 +43,45 @@ result: {
 		// first compile the cue code to make sure it's valid
 		instance, err := rt.Compile("whoami", config)
 		if err != nil {
-			log.Fatalf("%s", err)
+			log.Fatalf("comp %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		// next, poplate the list of users and the headers from the request
 		instance, err = instance.Fill(users, "users")
 		if err != nil {
+			log.Fatalf("fill %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		instance, err = instance.Fill(r.Header, "headers")
 		if err != nil {
+			log.Fatalf("fill %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		// load the result struct from the instance
 		var result struct {
-			Found bool   `json:"found"`
-			Name  string `json:"name"`
+			AuthHeaderSet bool   `json:"auth_header_set"`
+			Token         string `json:"token"`
+			Found         bool   `json:"found"`
+			Name          string `json:"name"`
 		}
 		err = instance.Lookup("result").Decode(&result)
 		if err != nil {
+			log.Fatalf("look %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if !result.AuthHeaderSet {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		if result.Token == "" {
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 

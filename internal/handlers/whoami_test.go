@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/charlieegan3/go-authz-dsls/internal/handlers/cue"
 	"github.com/charlieegan3/go-authz-dsls/internal/handlers/golang"
 	"github.com/charlieegan3/go-authz-dsls/internal/handlers/rego"
 	"github.com/charlieegan3/go-authz-dsls/internal/types"
@@ -21,8 +22,9 @@ func TestWhoAmIEndpoints(t *testing.T) {
 	router := mux.NewRouter()
 	router.HandleFunc("/golang/whoami", golang.WhoAmIHandler(&users))
 	router.HandleFunc("/rego/whoami", rego.WhoAmIHandler(&users))
+	router.HandleFunc("/cue/whoami", cue.WhoAmIHandler(&users))
 
-	languages := []string{"golang", "rego"}
+	languages := []string{"golang", "rego", "cue"}
 
 	testCases := []struct {
 		Description      string
