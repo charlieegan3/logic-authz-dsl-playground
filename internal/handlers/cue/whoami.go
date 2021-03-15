@@ -2,7 +2,6 @@ package cue
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	"cuelang.org/go/cue"
@@ -20,22 +19,37 @@ users: [string]: {
 }
 headers: [string]: [string]
 
-_auth_header_value: *headers.Authorization[0] | ""
-_token: *strings.Split(_auth_header_value, " ")[1] | ""
+#auth_header_value: *headers.Authorization[0] | ""
+#token: *strings.Split(#auth_header_value, " ")[1] | ""
 
-_matched: [
+#matched: [
 	for name, user in users
-	if user.Token == _token {
+	if user.Token == #token {
 		name
 	}
 ]
 
-result: {
-	auth_header_set: _auth_header_value != "",
-	token: _token,
-	found: len(_matched) > 0,
-	name: *_matched[0] | ""
-}
+#codes: [
+	{
+		set: name != "",
+		value: 200,
+	},
+	{
+		set: #auth_header_value != "" && #token == "",
+		value: 400,
+	},
+	{
+		set: #auth_header_value == "" || len(#matched) != 1,
+		value: 401,
+	},
+	{
+		set: true, // default code if no other matches
+		value: 500,
+	},
+]
+
+name: *#matched[0] | ""
+code: [ for c in #codes if c.set { c.value } ][0]
 `
 
 		var rt cue.Runtime
@@ -43,55 +57,35 @@ result: {
 		// first compile the cue code to make sure it's valid
 		instance, err := rt.Compile("whoami", config)
 		if err != nil {
-			log.Fatalf("comp %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		// next, poplate the list of users and the headers from the request
 		instance, err = instance.Fill(users, "users")
 		if err != nil {
-			log.Fatalf("fill %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		instance, err = instance.Fill(r.Header, "headers")
 		if err != nil {
-			log.Fatalf("fill %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		// load the result struct from the instance
-		var result struct {
-			AuthHeaderSet bool   `json:"auth_header_set"`
-			Token         string `json:"token"`
-			Found         bool   `json:"found"`
-			Name          string `json:"name"`
-		}
-		err = instance.Lookup("result").Decode(&result)
+		// load the results from the instance
+		code, err := instance.Lookup("code").Int64()
 		if err != nil {
-			log.Fatalf("look %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		if !result.AuthHeaderSet {
-			w.WriteHeader(http.StatusUnauthorized)
+		name, err := instance.Lookup("name").String()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		if result.Token == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		// if there was no user matched, then 401
-		if !result.Found {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, result.Name)
+		w.WriteHeader(int(code))
+		fmt.Fprintf(w, name)
 	}
 }
