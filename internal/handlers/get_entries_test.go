@@ -15,16 +15,21 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func TestWhoAmIEndpoints(t *testing.T) {
+func TestGetEntriesEndpoints(t *testing.T) {
 	var users = map[string]types.User{
 		"Alice": {Token: "123"},
 		"Bob":   {Token: "456"},
 	}
+	var entries = map[string]types.Entry{
+		"1": {User: "Alice", Content: "Dear diary..."},
+		"2": {User: "Bob", Content: "I have a secret to tell..."},
+	}
+
 	router := mux.NewRouter()
-	router.HandleFunc("/golang/whoami", golang.WhoAmIHandler(&users))
-	router.HandleFunc("/rego/whoami", rego.WhoAmIHandler(&users))
-	router.HandleFunc("/cue/whoami", cue.WhoAmIHandler(&users))
-	router.HandleFunc("/polar/whoami", polar.WhoAmIHandler(&users))
+	router.HandleFunc("/golang/entries/{entryID}", golang.GetEntryHandler(&users, &entries))
+	router.HandleFunc("/rego/entries/{entryID}", rego.GetEntryHandler(&users, &entries))
+	router.HandleFunc("/cue/entries/{entryID}", cue.GetEntryHandler(&users, &entries))
+	router.HandleFunc("/polar/entries/{entryID}", polar.GetEntryHandler(&users, &entries))
 
 	languages := []string{"golang", "rego", "cue", "polar"}
 
@@ -32,6 +37,7 @@ func TestWhoAmIEndpoints(t *testing.T) {
 		Description      string
 		Headers          map[string]string
 		Language         string
+		EntryID          int
 		ExpectedStatus   int
 		ExpectedResponse string
 	}{
@@ -40,45 +46,48 @@ func TestWhoAmIEndpoints(t *testing.T) {
 			Headers: map[string]string{
 				"Authorization": "Bearer 123",
 			},
+			EntryID:          1,
 			ExpectedStatus:   http.StatusOK,
-			ExpectedResponse: "Alice",
+			ExpectedResponse: "Dear diary...",
 		},
 		{
 			Description: "permitted request for bob",
 			Headers: map[string]string{
 				"Authorization": "Bearer 456",
 			},
+			EntryID:          2,
 			ExpectedStatus:   http.StatusOK,
-			ExpectedResponse: "Bob",
+			ExpectedResponse: "I have a secret to tell...",
+		},
+		{
+			Description: "denied request",
+			Headers: map[string]string{
+				"Authorization": "Bearer 123",
+			},
+			EntryID:        2,
+			ExpectedStatus: http.StatusUnauthorized,
+		},
+		{
+			Description: "not found",
+			Headers: map[string]string{
+				"Authorization": "Bearer 123",
+			},
+			EntryID:        3,
+			ExpectedStatus: http.StatusNotFound,
 		},
 		{
 			Description: "bad request",
 			Headers: map[string]string{
-				"Authorization": "456",
+				"Authorization": "123", // missing bearer
 			},
-			ExpectedStatus:   http.StatusBadRequest,
-			ExpectedResponse: "",
-		},
-		{
-			Description:      "missing auth header",
-			Headers:          map[string]string{},
-			ExpectedStatus:   http.StatusUnauthorized,
-			ExpectedResponse: "",
-		},
-		{
-			Description: "unknown token",
-			Headers: map[string]string{
-				"Authorization": "Bearer 789",
-			},
-			ExpectedStatus:   http.StatusUnauthorized,
-			ExpectedResponse: "",
+			ExpectedStatus: http.StatusBadRequest,
 		},
 	}
 
 	for _, tc := range testCases {
 		for _, language := range languages {
 			t.Run(fmt.Sprintf("%s %s", tc.Description, language), func(t *testing.T) {
-				req, err := http.NewRequest("GET", fmt.Sprintf("/%s/whoami", language), nil)
+				req, err := http.NewRequest("GET", fmt.Sprintf("/%s/entries/%d", language, tc.EntryID), nil)
 
 				for k, v := range tc.Headers {
 					req.Header.Set(k, v)

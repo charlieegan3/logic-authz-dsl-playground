@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	cuelang.org/go v0.2.2
-	github.com/Jeffail/gabs/v2 v2.6.0 // indirect
+	github.com/Jeffail/gabs/v2 v2.6.0
 	github.com/cockroachdb/apd/v2 v2.0.2 // indirect
 	github.com/gorilla/mux v1.8.0
 	github.com/open-policy-agent/opa v0.26.0

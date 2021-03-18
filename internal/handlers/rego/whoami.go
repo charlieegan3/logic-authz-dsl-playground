@@ -11,11 +11,11 @@ import (
 	"github.com/open-policy-agent/opa/rego"
 )
 
-// whoAmiRule is partially evaluated at boot time and then available to make
-// decisions during the execution of the handler
-var whoAmiRule rego.PartialResult
-
-func init() {
+// WhoAmIHandler is the rego implementation of the first task
+func WhoAmIHandler(users *map[string]types.User) func(w http.ResponseWriter, r *http.Request) {
+	// whoAmiRule is partially evaluated at boot time and then available to make
+	// decisions during the execution of the handler
+	var whoAmiRule rego.PartialResult
 	// initialize the various gubbins for Rego evaluation.
 	// we can load and partially evaluate the rule before using it in our
 	// handler.
@@ -46,10 +46,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("failed to compute partial result: %s", err)
 	}
-}
 
-// WhoAmIHandler is the rego implementation of the first task
-func WhoAmIHandler(users *map[string]types.User) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// this data will be used by Rego to determine the user making the request
 		authzInputData := struct {

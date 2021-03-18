@@ -11,9 +11,9 @@ import (
 	osotypes "github.com/osohq/go-oso/types"
 )
 
-var o oso.Oso
-
-func init() {
+// WhoAmIHandler is the polar implementation of the first task
+func WhoAmIHandler(users *map[string]types.User) func(w http.ResponseWriter, r *http.Request) {
+	var o oso.Oso
 	// configure a new Oso instance and load in our whoami 'policy' (read:
 	// lookup in polar in this case...)
 	o, _ = oso.NewOso()
@@ -24,10 +24,6 @@ func init() {
 whoami(userName, users, user: User) if
   [userName, match] in users and
   match.Token = user.Token;`)
-}
-
-// WhoAmIHandler is the polar implementation of the first task
-func WhoAmIHandler(users *map[string]types.User) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// extract the token and proceed if supplied
 		auth := r.Header.Get("Authorization")
