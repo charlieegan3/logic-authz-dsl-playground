@@ -36,7 +36,6 @@ func TestGetEntriesEndpoints(t *testing.T) {
 	testCases := []struct {
 		Description      string
 		Headers          map[string]string
-		Language         string
 		EntryID          int
 		ExpectedStatus   int
 		ExpectedResponse string
