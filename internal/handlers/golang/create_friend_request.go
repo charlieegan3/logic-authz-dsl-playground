@@ -2,7 +2,6 @@ package golang
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -74,29 +73,45 @@ func CreateFriendRequestHandler(users *map[string]types.User) func(w http.Respon
 			return
 		}
 
-		// find any mutual friends
-		var mutualFriends []string
+		// find path of mutual friends
+		var reachedFriends []string
+		var unexploredFriends []string
 		for _, existingFriend := range requestingUser.Friends {
-			fmt.Println("existingFriend", existingFriend)
-			for _, maybeMutualFriend := range friendUser.Friends {
-				fmt.Println("maybeMutualFriend", maybeMutualFriend)
-				if existingFriend == maybeMutualFriend {
-					fmt.Println("added")
-					mutualFriends = append(mutualFriends, maybeMutualFriend)
+			unexploredFriends = append(unexploredFriends, existingFriend)
+		}
+		for {
+			if len(unexploredFriends) == 0 {
+				break
+			}
+
+			currentFriend := unexploredFriends[0]
+			unexploredFriends = unexploredFriends[1:]
+			reachedFriends = append(reachedFriends, currentFriend)
+
+			currentFriendUser, _ := (*users)[currentFriend]
+			for _, friend := range currentFriendUser.Friends {
+				alreadyReached := false
+				for _, reachedFriend := range reachedFriends {
+					if friend == reachedFriend {
+						alreadyReached = true
+						break
+					}
+				}
+				if !alreadyReached {
+					unexploredFriends = append(unexploredFriends, friend)
+				}
+
+				if friend == friendUsername {
+					// update the target user's list of FriendRequests
+					friendUser.FriendRequests = append(friendUser.FriendRequests, requestingUsername)
+
+					// report back the to the user who they are
+					w.WriteHeader(http.StatusOK)
+					return
 				}
 			}
 		}
 
-		// must have mutual friend to make request
-		if len(mutualFriends) == 0 {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-
-		// update the target user's list of FriendRequests
-		friendUser.FriendRequests = append(friendUser.FriendRequests, requestingUsername)
-
-		// report back the to the user who they are
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusUnauthorized)
 	}
 }

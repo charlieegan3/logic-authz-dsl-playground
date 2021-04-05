@@ -18,8 +18,9 @@ func TestCreateFriendRequestEndpoint(t *testing.T) {
 	var users = map[string]types.User{
 		"Alice":   {Token: "123", Friends: []string{"Bob"}},
 		"Bob":     {Token: "456", Friends: []string{"Alice", "Charlie"}},
-		"Charlie": {Token: "789", Friends: []string{"Bob"}},
+		"Charlie": {Token: "789", Friends: []string{"Bob", "Edward"}},
 		"Dennis":  {Token: "101", Friends: []string{}},
+		"Edward":  {Token: "112", Friends: []string{"Charlie"}},
 	}
 
 	router := mux.NewRouter()
@@ -49,6 +50,14 @@ func TestCreateFriendRequestEndpoint(t *testing.T) {
 			},
 			FriendName:     "Dennis",
 			ExpectedStatus: http.StatusUnauthorized,
+		},
+		{
+			Description: "alice can add edward as a friend since bob then charlie is their mutual friend",
+			Headers: map[string]string{
+				"Authorization": "Bearer 123",
+			},
+			FriendName:     "Edward",
+			ExpectedStatus: http.StatusOK,
 		},
 	}
 
