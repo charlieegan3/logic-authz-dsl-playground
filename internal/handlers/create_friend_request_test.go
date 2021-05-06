@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/charlieegan3/go-authz-dsls/internal/handlers/golang"
+	"github.com/charlieegan3/go-authz-dsls/internal/handlers/rego"
 	"github.com/charlieegan3/go-authz-dsls/internal/types"
 	"github.com/gorilla/mux"
 )
@@ -25,8 +26,9 @@ func TestCreateFriendRequestEndpoint(t *testing.T) {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/golang/friendrequests", golang.CreateFriendRequestHandler(&users))
+	router.HandleFunc("/rego/friendrequests", rego.CreateFriendRequestHandler(&users))
 
-	languages := []string{"golang"}
+	languages := []string{"golang", "rego"}
 
 	testCases := []struct {
 		Description      string
@@ -64,7 +66,6 @@ func TestCreateFriendRequestEndpoint(t *testing.T) {
 	for _, tc := range testCases {
 		for _, language := range languages {
 			t.Run(fmt.Sprintf("%s %s", tc.Description, language), func(t *testing.T) {
-				fmt.Println("-----------------------")
 				payload, err := json.Marshal(struct {
 					Friend string `json:"friend"`
 				}{
