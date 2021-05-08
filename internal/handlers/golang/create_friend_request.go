@@ -79,7 +79,10 @@ func CreateFriendRequestHandler(users *map[string]types.User) func(w http.Respon
 		for _, existingFriend := range requestingUser.Friends {
 			unexploredFriends = append(unexploredFriends, existingFriend)
 		}
+
+		// naive loop though all the friends aggregating potential new connections as we find them
 		for {
+			// no more work to do, a connection was not found :(
 			if len(unexploredFriends) == 0 {
 				break
 			}
@@ -101,17 +104,20 @@ func CreateFriendRequestHandler(users *map[string]types.User) func(w http.Respon
 					unexploredFriends = append(unexploredFriends, friend)
 				}
 
+				// if the friend was found, and matches the requested friend then we allow the request
 				if friend == friendUsername {
 					// update the target user's list of FriendRequests
 					friendUser.FriendRequests = append(friendUser.FriendRequests, requestingUsername)
 
-					// report back the to the user who they are
+					// just return 200 ok if allowed, don't bother to update the state
+					// since not a real application
 					w.WriteHeader(http.StatusOK)
 					return
 				}
 			}
 		}
 
+		// return 401 if there was no connection found
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 }

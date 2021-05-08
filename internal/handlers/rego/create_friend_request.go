@@ -94,12 +94,13 @@ func CreateFriendRequestHandler(users *map[string]types.User) func(w http.Respon
 			}
 		}
 
-		// no user exists, retrun 404
+		// no user exists, return 404
 		if friendUsername == "" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
+		// authzInputData is a structure passed to the Rego policy evaluation
 		authzInputData := struct {
 			User            string
 			Users           *map[string]types.User
@@ -116,18 +117,21 @@ func CreateFriendRequestHandler(users *map[string]types.User) func(w http.Respon
 			return
 		}
 
+		// convert to data to make extracting the result easier
 		bytes, err := json.MarshalIndent(resultSet, "", "    ")
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
+		// wrap the data in gabs to make it easier to extract values
 		result, err := gabs.ParseJSON(bytes)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
+		// extract the allowed value from the response using gabs
 		allowed, ok := result.Path("0.expressions.0.value").Data().(bool)
 		if !ok {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -139,6 +143,8 @@ func CreateFriendRequestHandler(users *map[string]types.User) func(w http.Respon
 			return
 		}
 
+		// just return 200 ok if allowed, don't bother to update the state
+		// since not a real application
 		w.WriteHeader(http.StatusOK)
 	}
 }
