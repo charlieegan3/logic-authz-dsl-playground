@@ -11,6 +11,7 @@ import (
 )
 
 func GetEntryHandler(users *map[string]types.User, entries *map[string]types.Entry) func(w http.ResponseWriter, r *http.Request) {
+	// config is our CUE 'policy' code
 	const config = `
 entry: {
     User: string
@@ -20,21 +21,26 @@ user: string
 allowed: entry.User == user
 `
 
+	// we're going to share the CUE runtime between requests
 	var rt cue.Runtime
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		// we're using a bearer token, we have a helper to look up the user
+		// from using the data in the headers
 		userName, responseCode := helpers.AuthnUser(&r.Header, users)
 		if responseCode > 0 {
 			w.WriteHeader(responseCode)
 			return
 		}
 
+		// get the entryID from the request vars set for us by go mux
 		entryID, ok := mux.Vars(r)["entryID"]
 		if !ok {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
+		// check that the entry exists
 		entry, ok := (*entries)[entryID]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
@@ -47,6 +53,7 @@ allowed: entry.User == user
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 		// next, poplate the list of users and the headers from the request
 		instance, err = instance.Fill(userName, "user")
 		if err != nil {
